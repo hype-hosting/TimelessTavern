@@ -1,7 +1,7 @@
 {
     "input_sequence": "<|start|>user<|message|>",
     "output_sequence": "<|start|>assistant<|channel|>final<|message|>",
-    "last_output_sequence": "",
+    "last_output_sequence": "{{noop}}",
     "system_sequence": "<|start|>developer<|message|>",
     "stop_sequence": "",
     "wrap": false,
@@ -18,8 +18,8 @@
     "first_input_sequence": "",
     "last_input_sequence": "",
     "names_behavior": "force",
-    "sequences_as_stop_strings": true,
+    "sequences_as_stop_strings": false,
     "story_string_prefix": "<|start|>system<|message|>",
     "story_string_suffix": "<|end|>",
-    "name": "OpenAI Harmony"
+    "name": "OpenAI Harmony (Thinking)"
 }
