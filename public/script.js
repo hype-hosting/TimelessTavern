@@ -2846,7 +2846,7 @@ class StreamingProcessor {
             stoppingStrings: this.stoppingStrings,
         });
 
-        const charsToBalance = ['*', '"', '```', '~~~'];
+        const charsToBalance = ['*', '"', '```', '~~~', '`'];
         for (const char of charsToBalance) {
             if (!isFinal && isOdd(countOccurrences(processedText, char))) {
                 const separator = char.length > 1 ? '\n' : '';
@@ -2903,8 +2903,140 @@ class StreamingProcessor {
                 {},
                 false,
             );
+
             if (this.messageTextDom instanceof HTMLElement) {
-                this.messageTextDom.innerHTML = formattedText;
+
+                if (!power_user.smooth_streaming_wordFade) {
+                    this.messageTextDom.innerHTML = formattedText;
+                }
+
+                if (power_user.smooth_streaming_wordFade) {
+
+                    const speedFactor = Math.max(100 - power_user.smooth_streaming_speed, 1);
+
+                    /**
+                     * @param {string} w
+                     */
+                    function determineDelay(w) {
+                        if (w.trim().length <= 3) {
+                            return 1; //he, she, and, but, the, a, I, to, of, in, is, it, on, at, by, as, an, or -- get a very short delay
+                        } else if (w.trim().length <= 6) {
+                            return 4; //short words get a short delay
+                        } else if (w.trim().length <= 9) {
+                            return 6; //medium words get a medium delay
+                        } else {
+                            return 8; //long words get a longer delay
+                        }
+                    }
+
+                    this.messageTextDom.innerHTML = formattedText;
+                    let areWeInPre = false;
+                    let areWeInCode = false;
+                    let areWeInAList = false;
+                    let usingElementMethod = false;
+
+                    //early detect if we re inside a PRE or CODE block, in which case we do NOT do wordFade
+                    const lastElemenetType = this.messageTextDom.lastElementChild ? this.messageTextDom.lastElementChild.tagName.toLowerCase() : 'none';
+                    //console.info('lastElementType:', lastElemenetType);
+
+                    if (lastElemenetType === 'pre') {
+                        areWeInPre = true;
+                    } else if (lastElemenetType === 'code') {
+                        areWeInCode = true;
+                    } else if (lastElemenetType === 'ol' || lastElemenetType === 'ul') {
+                        areWeInAList = true;
+                    } else {
+                        areWeInPre = false;
+                        areWeInCode = false;
+                        areWeInAList = false;
+                    }
+
+
+                    //find the lastElement in the messageTextDom
+                    const lastContainerElement = this.messageTextDom.lastElementChild;
+                    //console.info('lastContainerElement:', lastContainerElement);
+
+                    //find the last container in the messageTextDom
+                    //for normal chat this is <p>. we avoid stuff like pre, code, ul, ol
+                    if (lastContainerElement) {
+
+                        const lastChild = lastContainerElement.lastElementChild;
+                        const lastChildofLastChild = lastChild ? lastChild.lastElementChild : null; //for things like ol and ul, looking for li
+                        //get the position of the last word in the textContent
+                        const domTextContent = this.messageTextDom.textContent;
+                        const lastSpaceIndex = domTextContent ? domTextContent.lastIndexOf(' ') : -1;
+                        const lastWordIndex = lastSpaceIndex === -1 ? 0 : lastSpaceIndex;
+                        const domTextContentLastWord = domTextContent ? domTextContent.substring(lastWordIndex) : '';
+                        //console.info(`lastSpaceIndex: ${lastSpaceIndex}, lastWordIndex: ${lastWordIndex}, domTextContent length: ${domTextContent.length}`);
+                        //console.info('lastWord (from domTextContent):', domTextContentLastWord);
+
+                        let lastWord = '';
+
+                        let lastTextNode;
+                        const walker = document.createTreeWalker(this.messageTextDom, NodeFilter.SHOW_TEXT, null);
+                        let node;
+                        while ((node = walker.nextNode())) {
+                            lastTextNode = node;
+                        }
+
+                        if (!areWeInPre && !areWeInCode && !areWeInAList) {
+                            //if the last word is NOT inside an element (not given HTML styling), we need to apply the fade in span directly to it
+                            if (!lastChild || !lastChild.textContent || !lastChild.textContent.includes(domTextContentLastWord) || lastChild.nextSibling) {
+                                //console.info('TEXT NODE METHOD FOR LAST WORD');
+                                //find the last text node in messageTextDom
+
+                                //console.info('lastTextNode content:', lastTextNode.textContent);
+
+                                if (lastTextNode && lastTextNode.textContent && lastTextNode.textContent.includes(domTextContentLastWord)) {
+                                    //remove the last word from the text node
+                                    //for non-styled text with no preceding styled text, this works:
+                                    lastWord = lastTextNode.textContent.substring(lastWordIndex, lastTextNode.textContent.length);
+                                    if (lastWord.length === 0) { //this happens after leaving styled text and entering non-styled
+                                        //console.log('lastWord length is 0, pulling from domTextContentLastWord instead');
+                                        lastWord = domTextContentLastWord;
+                                        lastTextNode.textContent = lastTextNode.textContent.substring(0, lastTextNode.textContent.length - domTextContentLastWord.length);
+                                        //lastWord = lastTextNode.textContent.substring(0, lastWordIndex);
+                                    } else {
+                                        lastTextNode.textContent = lastTextNode.textContent.substring(0, lastWordIndex);
+                                    }
+
+                                    //console.info('lastTextNode.textContent (after lastword removal):', lastTextNode.textContent);
+                                    //console.info('lastWord (from lastTextNode.textContent splice):', lastWord);
+                                }
+                            } else if ((lastChild || lastChildofLastChild || !lastChild.nextSibling)) { //for styled last words, just add the span to the last child element
+                                //console.info('ELEMENT METHOD FOR LAST WORD');
+                                usingElementMethod = true;
+                                const lastChildText = lastChildofLastChild ? lastChildofLastChild.textContent : lastChild.textContent;
+                                //console.info('lastChildText:', lastChildText);
+                                if (lastChildText) {
+                                    const words = lastChildText.split(' ');
+                                    //console.log('Words in lastChildText:', words.length);
+                                    if (words.length > 0) {
+                                        lastWord = words[words.length - 1];
+                                        //console.log('Last word ( via element.textContent space search):', lastWord);
+                                        //remove the last word from the lastChild
+                                        lastChild.textContent = words.slice(0, -1).join(' ');
+                                        //create a new span for the last word
+                                    }
+                                }
+                            } else {
+                                console.warn('lastChildText is empty', lastChild);
+                            }
+
+                            let fadeDuration = determineDelay(lastWord) * speedFactor;
+                            const span = document.createElement('span');
+                            const needsLeadingSpace = lastSpaceIndex !== -1;
+                            //console.info('lastWord for span:', lastWord, 'needsLeadingSpace:', needsLeadingSpace);
+                            //console.info(span);
+                            span.textContent = (needsLeadingSpace ? ' ' : '') + lastWord;
+                            usingElementMethod ? lastChild.appendChild(span) : lastTextNode.parentNode.insertBefore(span, lastTextNode.nextSibling);
+                            //console.log('Last word:', lastWord, 'Duration:', fadeDuration);
+                            $(span).css({ opacity: '0', animation: `wordFadeIn ${fadeDuration}ms forwards` });
+                            usingElementMethod = false;
+
+                        }
+                    }
+                }
             }
 
             const timePassed = formatGenerationTimer(this.timeStarted, currentTime, currentTokenCount, this.reasoningHandler.getDuration(), this.timeToFirstToken);

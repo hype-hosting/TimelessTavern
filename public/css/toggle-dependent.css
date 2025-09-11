@@ -477,11 +477,15 @@ body.expandMessageActions .mes .mes_buttons .extraMesButtonsHint {
     display: none !important;
 }
 
-#smooth_streaming:not(:checked)~#smooth_streaming_speed_control {
+#smooth_streaming_control_block:has(#smooth_streaming:not(:checked))>#smooth_streaming_speed_control {
     display: none;
 }
 
-#smooth_streaming:checked~#smooth_streaming_speed_control {
+#smooth_streaming_control_block:has(#smooth_streaming:not(:checked))>#smooth_streaming_wordFade_control {
+    display: none;
+}
+
+#smooth_streaming_control_block:has(#smooth_streaming:checked)>#smooth_streaming_speed_control {
     display: block;
 }
 

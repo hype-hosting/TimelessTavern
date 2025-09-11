@@ -4953,13 +4953,25 @@
                                     <small data-i18n="Clean-Up">Clean-Up</small>
                                 </div>
                             </div>
-                            <label class="checkbox_label flexWrap" for="smooth_streaming">
-                                <input id="smooth_streaming" type="checkbox" />
-                                <div class="flex-container alignItemsBaseline">
-                                    <small data-i18n="Smooth Streaming">
-                                        Smooth Streaming
-                                    </small>
-                                    <i class="fa-solid fa-flask" data-i18n="[title]Experimental feature. May not work for all backends." title="Experimental feature. May not work for all backends."></i>
+                            <div id="smooth_streaming_control_block">
+                                <label class="checkbox_label flexWrap" for="smooth_streaming">
+                                    <input id="smooth_streaming" type="checkbox" />
+                                    <div class="flex-container alignItemsBaseline">
+                                        <small data-i18n="Smooth Streaming">
+                                            Smooth Streaming
+                                        </small>
+                                        <i class="fa-solid fa-flask" data-i18n="[title]Experimental feature. May not work for all backends." title="Experimental feature. May not work for all backends."></i>
+                                    </div>
+                                </label>
+                                <div id="smooth_streaming_wordFade_control" class="flexBasis100p wide100p">
+                                    <div class="flex-container alignItemsBaseline">
+                                        <input id="smooth_streaming_wordFade" type="checkbox" />
+                                        <div class="flex-container alignItemsBaseline">
+                                            <small data-i18n="Per-Word Fade In">
+                                                Per-Word Fade In
+                                            </small>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div id="smooth_streaming_speed_control" class="flexBasis100p wide100p">
                                     <input type="range" id="smooth_streaming_speed" name="smooth_streaming_speed" min="0" max="100" step="10" value="50">
@@ -4969,7 +4981,11 @@
                                         <span data-i18n="Fast">Fast</span>
                                     </div>
                                 </div>
-                            </label>
+                            </div>
+
+
+
+
 
                             <label for="play_message_sound" class="checkbox_label" title="Play a sound when a message generation finishes." data-i18n="[title]Play a sound when a message generation finishes">
                                 <input id="play_message_sound" type="checkbox" />
@@ -5381,7 +5397,7 @@
                     </div>
                 </div>
                 <form id="form_bg_upload" style="display: none;">
-                   <input type="file" id="add_bg_button" name="avatar" accept="image/jpeg,image/png,image/gif,image/bmp,image/svg+xml,video/*">
+                    <input type="file" id="add_bg_button" name="avatar" accept="image/jpeg,image/png,image/gif,image/bmp,image/svg+xml,video/*">
                 </form>
             </div>
         </div>

@@ -296,39 +296,152 @@ async function* parseStreamData(json) {
 export class SmoothEventSourceStream extends EventSourceStream {
     constructor() {
         super();
-        let lastStr = '';
-        const transformStream = new TransformStream({
-            async transform(chunk, controller) {
-                const event = chunk;
-                const data = event.data;
-                try {
-                    const hasFocus = document.hasFocus();
+        let lastStr = ''; //used by getDelay to determine the delay based on the last character sent, not used in word-fade mode
+        let bufferForWords = '';
+        let lastWord = '';
+        let previousParsed = null;
+        let delayForNextRound = null;
+        let weAreInACodeBlock = false;
+        const speedFactor = Math.max(100 - power_user.smooth_streaming_speed, 1);
+        const hasFocus = document.hasFocus();
 
-                    if (data === '[DONE]') {
-                        lastStr = '';
-                        return controller.enqueue(event);
+        if (power_user.smooth_streaming_wordFade) {
+            //make a stream transform that emits words with a trailing space
+            const transformWordStream = new TransformStream({
+                async transform(chunk, controller) {
+                    const event = chunk;
+                    const data = event.data;
+                    try {
+                        //const hasFocus = document.hasFocus();
+
+                        //if we see stream done, reset lastStr
+                        if (data === '[DONE]') {
+                            //send out the remaining bits inside wordBuffer before ending the stream
+                            if (bufferForWords.length > 0) {
+                                lastWord = bufferForWords;
+                                //console.info('[wordTransform] Emitting last buffered word:', lastWord);
+                                hasFocus && await delay(delayForNextRound);
+                                controller.enqueue(new MessageEvent(event.type, { data: JSON.stringify({ ...previousParsed.data, choices: [{ text: lastWord }] }) }));
+                                bufferForWords = '';
+                            }
+                            return controller.enqueue(event);
+                        }
+                        //if we aren't done parse the data
+                        const json = JSON.parse(data);
+                        //if it's not json, just pass it through
+                        if (!json) {
+                            return controller.enqueue(event);
+                        }
+
+                        //here we have good data, let's look for full words with a trailing space, and emit the last word only
+                        for await (const parsed of parseStreamData(json)) {
+
+                            previousParsed = parsed; //save the last parsed good data in case we need to emit a final word on [DONE]
+                            bufferForWords += parsed.chunk; //parsed.chunk = the latest letter to come through the stream
+
+                            let bufferHasFullWord = bufferForWords.includes(' ');
+                            //do a regex match to see if the buffer contains strings like `word`
+                            let bufferHasFullCode = /`[^`]+`/.test(bufferForWords);
+                            //do a regex match for ```(optional language word)\n
+                            let bufferSawCodeFence = /```(.*)\n/.test(bufferForWords);
+
+                            if (bufferSawCodeFence) {
+                                weAreInACodeBlock = !weAreInACodeBlock;
+                                //console.info('>>>We are now ' + (weAreInACodeBlock ? 'IN' : 'OUT OF') + ' a code block<<<');
+                            }
+
+                            if (!bufferHasFullWord && !bufferHasFullCode && !bufferSawCodeFence) {
+                                //no full words yet, just wait for more data
+                                continue;
+                            }
+
+                            if ((bufferHasFullWord || bufferHasFullCode || bufferSawCodeFence) && bufferForWords.length > 0) {
+                                hasFocus && await delay(delayForNextRound);
+                                //get the first word with a trailing space
+                                //determine if words has newlines in it, if so split on newlines first
+
+                                const lines = bufferForWords.split('\n');
+                                //console.log('Lines in bufferForWords:', lines.length);
+                                if (lines.length > 1) {
+                                    //we have newlines, so the first word is the first word of the first line plus a newline
+                                    const topLine = lines[0] + '\n';
+                                    lastWord = topLine; //get the first word with a trailing newline
+                                    //console.info(`bufferForWords: ${bufferForWords}, length: ${bufferForWords.length},lastWord: ${lastWord}, length: ${lastWord.length},`);
+                                    bufferForWords = bufferForWords.substring(lastWord.length, bufferForWords.length);
+                                    //console.info('Remaining buffer after topline cut:', bufferForWords);
+                                } else {
+                                    //no newlines, just split on spaces
+                                    lastWord = bufferForWords.split(' ')[0] + ' '; //get the first word with a trailing space
+                                    bufferForWords = bufferForWords.substring(lastWord.length, bufferForWords.length);
+                                    //console.info('Remaining buffer after word cut:', bufferForWords);
+                                }
+
+                                //console.info('[wordTransform] Emitting word:', lastWord);
+
+                                //send a controller event with the last word as the content
+                                controller.enqueue(new MessageEvent(event.type, { data: JSON.stringify({ ...parsed.data, choices: [{ text: lastWord }] }) }));
+
+                                function determineDelay() {
+                                    if (lastWord.includes('.') || lastWord.includes('?') || lastWord.includes('!')) { return 10; } //sentence enders get a longer delay
+                                    if (lastWord.includes(',')) { return 8; } //commas get a longer delay
+                                    if (lastWord.trim().length <= 3) {
+                                        return 1; //very short words get a very short delay
+                                    } else if (lastWord.trim().length <= 6) {
+                                        return 4; //short words get a short delay
+                                    } else if (lastWord.trim().length <= 9) {
+                                        return 6; //medium words get a medium delay
+                                    } else {
+                                        return 8; //long words get a longer delay
+                                    }
+                                }
+
+                                delayForNextRound = weAreInACodeBlock ? 0 : (determineDelay() * speedFactor) + 50;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Smooth Streaming parsing error', error);
+                        controller.enqueue(event);
                     }
 
-                    const json = JSON.parse(data);
+                },
 
-                    if (!json) {
-                        lastStr = '';
-                        return controller.enqueue(event);
+            });
+
+            this.readable = this.readable.pipeThrough(transformWordStream);
+
+        } else {
+            const transformStream = new TransformStream({
+                async transform(chunk, controller) {
+                    const event = chunk;
+                    const data = event.data;
+                    try {
+                        const hasFocus = document.hasFocus();
+
+                        if (data === '[DONE]') {
+                            lastStr = '';
+                            return controller.enqueue(event);
+                        }
+
+                        const json = JSON.parse(data);
+
+                        if (!json) {
+                            lastStr = '';
+                            return controller.enqueue(event);
+                        }
+
+                        for await (const parsed of parseStreamData(json)) {
+                            hasFocus && await delay(getDelay(lastStr));
+                            controller.enqueue(new MessageEvent(event.type, { data: JSON.stringify(parsed.data) }));
+                            lastStr = parsed.chunk;
+                        }
+                    } catch (error) {
+                        console.debug('Smooth Streaming parsing error', error);
+                        controller.enqueue(event);
                     }
-
-                    for await (const parsed of parseStreamData(json)) {
-                        hasFocus && await delay(getDelay(lastStr));
-                        controller.enqueue(new MessageEvent(event.type, { data: JSON.stringify(parsed.data) }));
-                        lastStr = parsed.chunk;
-                    }
-                } catch (error) {
-                    console.debug('Smooth Streaming parsing error', error);
-                    controller.enqueue(event);
-                }
-            },
-        });
-
-        this.readable = this.readable.pipeThrough(transformStream);
+                },
+            });
+            this.readable = this.readable.pipeThrough(transformStream);
+        }
     }
 }
 

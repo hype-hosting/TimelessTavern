@@ -252,6 +252,17 @@ table.responsiveTable {
     animation-name: flash;
 }
 
+/*wordFadeIn animation*/
+@keyframes wordFadeIn {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
 .has_hover_label .label_icon {
     transition: opacity var(--animation-duration) ease, max-width var(--animation-duration) ease;
 }
