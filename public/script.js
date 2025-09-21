@@ -9172,6 +9172,17 @@ export async function deleteCharacter(characterKey, { deleteChats = true } = {})
         characterKey = [characterKey];
     }
 
+    const inTempChat = this_chid === undefined && name2 === neutralCharacterName;
+    if (inTempChat) {
+        const confirmClose = await Popup.show.confirm(
+            t`You are currently in a temporary chat.`,
+            t`Deleting this character will close the chat and you will lose any unsaved messages. Do you want to proceed?`,
+        );
+        if (!confirmClose) {
+            return;
+        }
+    }
+
     const closeChatResult = await closeCurrentChat();
     if (!closeChatResult) {
         return;
