@@ -233,8 +233,12 @@ extensions:
 # Disabling will fallback to another locally available tokenizer.
 enableDownloadableTokenizers: true
 # -- OPENAI CONFIGURATION --
-# A placeholder message to use in strict prompt post-processing mode when the prompt doesn't start with a user message
-promptPlaceholder: "[Start a new chat]"
+# Prompt Post-Processing tweaks
+promptPostProcessing:
+  # A placeholder message to use in strict prompt post-processing mode when the prompt doesn't start with a user message
+  placeholder: "[Start a new chat]"
+  # Use one newline (legacy "Squash system messages" option) between system messages instead of two (original PPP behavior)
+  systemMergeSingleNewLine: false
 openai:
   # Will send a random user ID to OpenAI completion API
   randomizeUserId: false

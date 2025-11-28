@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { getConfigValue, tryParse } from './util.js';
 
-const PROMPT_PLACEHOLDER = getConfigValue('promptPlaceholder', 'Let\'s get started.');
+const PROMPT_PLACEHOLDER = getConfigValue('promptPostProcessing.placeholder', '[Start a new chat]');
+const SYSTEM_SINGLE_NEWLINE = !!getConfigValue('promptPostProcessing.systemMergeSingleNewLine', false);
 
 const REASONING_EFFORT = {
     auto: 'auto',
@@ -794,9 +795,13 @@ export function mergeMessages(messages, names, { strict = false, placeholders = 
 
     /** @type {Map<string,object>} */
     const contentTokens = new Map();
+    /** @type {WeakMap<object,boolean>} */
+    const systemMessages = new WeakMap();
 
     // Remove names from the messages
     messages.forEach((message) => {
+        systemMessages.set(message, message.role === 'system' && !message.name);
+
         if (!message.content) {
             message.content = '';
         }
@@ -857,8 +862,9 @@ export function mergeMessages(messages, names, { strict = false, placeholders = 
 
     // Squash consecutive messages with the same role
     messages.forEach((message) => {
+        const separator = SYSTEM_SINGLE_NEWLINE && systemMessages.get(message) ? '\n' : '\n\n';
         if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === message.role && message.content && message.role !== 'tool') {
-            mergedMessages[mergedMessages.length - 1].content += '\n\n' + message.content;
+            mergedMessages[mergedMessages.length - 1].content += separator + message.content;
         } else {
             mergedMessages.push(message);
         }

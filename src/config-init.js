@@ -134,6 +134,11 @@ const keyMigrationMap = [
         newKey: 'sso.authentikAuth',
         migrate: (value) => value,
     },
+    {
+        oldKey: 'promptPlaceholder',
+        newKey: 'promptPostProcessing.placeholder',
+        migrate: (value) => value,
+    },
 ];
 
 /**
