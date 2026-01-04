@@ -9,7 +9,7 @@ import {
     createSourceIndicator,
     createAliasIndicator,
     renderMacroDetails,
-} from '../macros/MacroBrowser.js';
+} from '../macros/engine/MacroBrowser.js';
 import { enumIcons } from '../slash-commands/SlashCommandCommonEnumsProvider.js';
 import { ValidFlagSymbols } from '../macros/engine/MacroFlags.js';
 import { MACRO_VARIABLE_SHORTHAND_PATTERN } from '../macros/engine/MacroLexer.js';
@@ -54,6 +54,9 @@ import { MACRO_VARIABLE_SHORTHAND_PATTERN } from '../macros/engine/MacroLexer.js
  * @property {boolean} [noBraces=false] - If true, display without {{ }} braces (for use as values, e.g., in {{if}} conditions).
  * @property {string} [paddingAfter=''] - Whitespace to add before closing }} (for matching opening whitespace style).
  * @property {boolean} [closeWithBraces=false] - If true, the completion will add }} to close the macro.
+ * @property {string[]} [flags=[]] - The currently already written flags for this autocomplete.
+ * @property {string} [currentFlag] - The current flag that is present, if any.
+ * @property {string} [fullText] - The currently written full text.
  */
 
 export class EnhancedMacroAutoCompleteOption extends AutoCompleteOption {
@@ -62,6 +65,9 @@ export class EnhancedMacroAutoCompleteOption extends AutoCompleteOption {
 
     /** @type {MacroAutoCompleteContext|null} */
     #context = null;
+
+    /** @type {EnhancedMacroAutoCompleteOptions|null} */
+    #options = null;
 
     /** @type {boolean} */
     #noBraces = false;
@@ -83,12 +89,12 @@ export class EnhancedMacroAutoCompleteOption extends AutoCompleteOption {
         if (contextOrOptions && typeof contextOrOptions === 'object') {
             if ('noBraces' in contextOrOptions || 'paddingAfter' in contextOrOptions || 'closeWithBraces' in contextOrOptions) {
                 // It's an options object
-                const options = /** @type {EnhancedMacroAutoCompleteOptions} */ (contextOrOptions);
-                this.#noBraces = options.noBraces ?? false;
-                this.#paddingAfter = options.paddingAfter ?? '';
+                this.#options = /** @type {EnhancedMacroAutoCompleteOptions} */ (contextOrOptions);
+                this.#noBraces = this.#options.noBraces ?? false;
+                this.#paddingAfter = this.#options.paddingAfter ?? '';
 
                 // If noBraces mode with closeWithBraces, complete with name + padding + }}
-                if (options.closeWithBraces) {
+                if (this.#options.closeWithBraces) {
                     this.valueProvider = () => `${macro.name}${this.#paddingAfter}}}`;
                     this.makeSelectable = true;
                 }
@@ -109,6 +115,12 @@ export class EnhancedMacroAutoCompleteOption extends AutoCompleteOption {
                 this.valueProvider = () => `${macro.name}${this.#paddingAfter}}}`;
                 this.makeSelectable = true; // Required when using valueProvider
             }
+        }
+
+        // {{//}} needs special handling. If we autocomplete right after **one** slash is already typed, we need to replace that, as it's treated as a flag otherwise.
+        const fullText = this.#options?.fullText ?? this.#context?.fullText ?? '';
+        if (macro.name === '//' && fullText.endsWith('/')) {
+            this.replacementStartOffset = (this.replacementStartOffset ?? 0) - 1; // Cut the leading slash
         }
     }
 
@@ -907,20 +919,38 @@ export class MacroClosingTagAutoCompleteOption extends AutoCompleteOption {
     /** @type {string} */
     #macroName;
 
+    /** @type {string} */
+    #paddingBefore;
+
+    /** @type {string} */
+    #paddingAfter;
+
     /**
      * @param {string} macroName - The name of the macro to close.
+     * @param {Object} [options] - Optional configuration.
+     * @param {string} [options.paddingBefore=''] - Whitespace after {{ in opening tag (target padding).
+     * @param {string} [options.paddingAfter=''] - Whitespace before }} in opening tag (target padding).
+     * @param {string} [options.currentPadding=''] - Whitespace the user has already typed after {{.
      */
-    constructor(macroName) {
+    constructor(macroName, options = {}) {
         // The closing tag is what we're suggesting - use /macroName as the name for matching
         const closingTag = `/${macroName}`;
         super(closingTag, '{/');
         this.#macroName = macroName;
+        this.#paddingBefore = options.paddingBefore ?? '';
+        this.#paddingAfter = options.paddingAfter ?? '';
+
+        // Calculate the replacement offset to replace any existing whitespace the user typed
+        // This allows us to normalize the whitespace to match the opening tag's style
+        const currentPadding = options.currentPadding ?? '';
+        // Negative offset to start replacement earlier (eating the user's whitespace)
+        this.replacementStartOffset = -currentPadding.length;
 
         // Custom valueProvider to return the correct replacement text
-        // Autocomplete REPLACES the typed identifier entirely, so return the full closing tag
+        // Includes the target paddingBefore from the opening tag, replacing any user-typed whitespace
         this.valueProvider = () => {
-            // Return full closing tag content (without {{ since that's before the identifier)
-            return `/${macroName}}}`;
+            // Return: paddingBefore + /macroName + paddingAfter + }}
+            return `${this.#paddingBefore}/${macroName}${this.#paddingAfter}}}`;
         };
 
         // Make selectable so TAB completion works (valueProvider alone makes it non-selectable)
@@ -1033,7 +1063,7 @@ export function parseMacroContext(macroText, cursorOffset) {
     while (i < macroText.length) {
         const char = macroText[i];
         // Check if this looks like a closing tag: `/` followed by an identifier character
-        if (char === '/' && i + 1 < macroText.length && /[a-zA-Z_]/.test(macroText[i + 1])) {
+        if (char === '/' && i + 1 < macroText.length && /[a-zA-Z/]/.test(macroText[i + 1])) {
             // This is a closing tag identifier, not a flag - stop parsing flags
             break;
         }
