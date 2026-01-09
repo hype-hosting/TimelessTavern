@@ -2562,6 +2562,7 @@ export function addOneMessage(mes, { type = 'normal', insertAfter = null, scroll
         updateSwipeCounter(newMessageId, { messageElement: newMessage });
     }
 
+    // The caller should handle the rest after adding a message to DOM.
     if (!insert) {
         return newMessage;
     }
