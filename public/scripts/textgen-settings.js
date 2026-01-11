@@ -229,6 +229,8 @@ export const textgenerationwebui_settings = {
     featherless_model: '',
     generic_model: '',
     extensions: {},
+    adaptive_target: -0.01,
+    adaptive_decay: 0.9,
 };
 
 export {
@@ -313,6 +315,8 @@ export const setting_names = [
     'generic_model',
     'extensions',
     'json_schema_allow_empty',
+    'adaptive_target',
+    'adaptive_decay',
 ];
 
 const DYNATEMP_BLOCK = document.getElementById('dynatemp_block_ooba');
@@ -751,7 +755,7 @@ async function getStatusTextgen() {
                     power_user.chat_template_hash = chat_template_hash;
 
                     if (wantsContextSize && 'default_generation_settings' in data) {
-                        const backend_max_context = data['default_generation_settings']['n_ctx'];
+                        const backend_max_context = data.default_generation_settings.n_ctx;
                         if (backend_max_context && typeof backend_max_context === 'number') {
                             const old_value = max_context;
                             if (max_context !== backend_max_context) {
@@ -909,16 +913,16 @@ export function initTextGenSettings() {
             $('#ban_eos_token_textgenerationwebui').prop('checked', false); //Aphro should not ban EOS, just ignore it; 'add token '2' to ban list do to this'
             //special handling for vLLM/Aphrodite topK -1 disable state
             $('#top_k_textgenerationwebui').attr('min', -1);
-            if ($('#top_k_textgenerationwebui').val() === '0' || textgenerationwebui_settings['top_k'] === 0) {
-                textgenerationwebui_settings['top_k'] = -1;
+            if ($('#top_k_textgenerationwebui').val() === '0' || textgenerationwebui_settings.top_k === 0) {
+                textgenerationwebui_settings.top_k = -1;
                 $('#top_k_textgenerationwebui').val('-1').trigger('input');
             }
         } else {
             $('#mirostat_mode_textgenerationwebui').attr('step', 1);
             //undo special vLLM/Aphrodite setup for topK
             $('#top_k_textgenerationwebui').attr('min', 0);
-            if ($('#top_k_textgenerationwebui').val() === '-1' || textgenerationwebui_settings['top_k'] === -1) {
-                textgenerationwebui_settings['top_k'] = 0;
+            if ($('#top_k_textgenerationwebui').val() === '-1' || textgenerationwebui_settings.top_k === -1) {
+                textgenerationwebui_settings.top_k = 0;
                 $('#top_k_textgenerationwebui').val('0').trigger('input');
             }
         }
@@ -989,6 +993,8 @@ export function initTextGenSettings() {
             'xtc_probability_textgenerationwebui': 0,
             'nsigma_textgenerationwebui': 0,
             'min_keep_textgenerationwebui': 0,
+            'adaptive_target_textgenerationwebui': -0.01,
+            'adaptive_decay_textgenerationwebui': 0.9,
         };
 
         for (const [id, value] of Object.entries(inputs)) {
@@ -1630,6 +1636,8 @@ export function createTextGenGenerationData(settings, model, finalPrompt = null,
         'nsigma': settings.nsigma,
         'top_n_sigma': settings.nsigma,
         'min_keep': settings.min_keep,
+        'adaptive_target': settings.adaptive_target,
+        'adaptive_decay': settings.adaptive_decay,
         parseSequenceBreakers: function () {
             try {
                 return JSON.parse(this.dry_sequence_breakers);
