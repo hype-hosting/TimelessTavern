@@ -57,3 +57,38 @@ public/scripts/extensions/third-party
 yarn.lock
 *.code-workspace
 test-results/
+config.yaml
+# Main config (contains credentials)
+config.yaml
+
+# Config backups / variants (DANGEROUS)
+config.yaml.*
+config*.yaml
+config*.yml
+*.yaml.old
+*.yaml.backup*
+*.yml.old
+*.yml.backup*
+
+# Logs
+*.log
+logs/
+*.txt
+
+# Runtime / generated data (NEVER COMMIT)
+data/
+userdata/
+users/
+chats/
+characters/
+groups/
+presets/
+themes/
+extensions/
+backups/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
